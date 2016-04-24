@@ -1,0 +1,44 @@
+<project name="TritonTransfer" default="TritonTransfer" basedir=".">
+<description>Project 3</description>
+
+<property name="src" location="src" />
+<property name="gen" location="gen-java" />
+<property name="build" location="build" />
+<property name="cpath" location="/usr/share/java/libthrift.jar:/usr/share/java/slf4j/slf4j-api.jar" />
+
+<target name="init">
+<tstamp />
+<mkdir dir="${build}"/>
+</target>
+
+<target name="compile" depends="init">
+<javac srcdir="${gen}" destdir="${build}" classpath="${cpath}" includeantruntime="false" >  
+<compilerarg value="-Xlint:deprecation"/> 
+</javac>
+<javac srcdir="${src}" destdir="${build}" classpath="${cpath}:${gen}" includeantruntime="false" >   
+<compilerarg value="-Xlint:deprecation"/> 
+</javac>
+</target>
+
+<target name="TritonTransfer" depends="compile">
+<jar jarfile="ttmdserver.jar" basedir="${build}">
+    <manifest>
+     <attribute name="Main-Class" value="edu.ucsd.cse124.ttmdserver"/>
+    </manifest>
+</jar>
+<jar jarfile="ttblockserver.jar" basedir="${build}">
+    <manifest>
+     <attribute name="Main-Class" value="edu.ucsd.cse124.ttblockserver"/>
+    </manifest>
+</jar>
+</target>
+
+<target name="clean">
+<delete dir="${build}" />
+<delete file="ttmdserver.jar" />
+<delete file="ttblockserver.jar" />
+</target>
+
+</project>
+
+

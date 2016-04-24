@@ -1,0 +1,196 @@
+#!/usr/bin/env python
+
+import sys
+import hashlib
+import os
+
+sys.path.append('gen-py')
+
+from cse124 import TritonTransfer
+from cse124.ttypes import *
+
+from thrift import Thrift
+from thrift.transport import TSocket
+from thrift.transport import TTransport
+from thrift.protocol import TBinaryProtocol
+
+server = ""
+port = ""
+operation = ""
+filename = ""
+down_dir = ""
+
+def begin():
+
+	  	if(operation == "upload"):
+	  		try:
+				transport = TSocket.TSocket(server, int(port))
+	  			transport = TTransport.TBufferedTransport(transport)
+	  			protocol = TBinaryProtocol.TBinaryProtocol(transport)
+	  			client = TritonTransfer.Client(protocol)
+	  			transport.open()
+				client.ping()
+
+		  		content = []
+		  		hashlist = []
+		  		rhashlist = []
+		  		fo = open(filename, "r+")
+		  		while True:
+		  			data = fo.read(16000)
+		  			if not data:
+		  				break
+		  			content.append(data)
+		  			encode = hashlib.sha256(data).hexdigest()
+		  			hashlist.append(encode)
+		  		rhashlist = client.uploadFile(os.path.basename(filename), hashlist)
+		  		rhashlist = list(set(rhashlist))
+
+	  			transport.close()
+			except Thrift.TException, tx:
+  				return '%s' % (tx.message)
+
+	  		for i in range(len(rhashlist)):
+	  			for j in range(len(hashlist)):
+	  				if(rhashlist[i].hashValue == hashlist[j]):
+	  					try:
+	  						#print rhashlist[i].IPAddress1
+	  						#print rhashlist[i].port1
+	  						transport = TSocket.TSocket(rhashlist[i].IPAddress1 + ".ucsd.edu", rhashlist[i].port1)
+	  						#transport = TSocket.TSocket("seed-g60-109.ucsd.edu", 9879)
+	  						transport = TTransport.TBufferedTransport(transport)
+	  						protocol = TBinaryProtocol.TBinaryProtocol(transport)
+	  						client = TritonTransfer.Client(protocol)
+	  						transport.open()
+	  						client.ping()
+	  						client.uploadBlock(hashlist[j], content[j])
+	  						transport.close()
+	  					except LargeBlockException:
+  							print "ERROR"
+
+  						except InvalidHashException:
+  							print "ERROR"
+	  					
+	  					except Thrift.TException, tx:
+  							return '%s' % (tx.message)
+
+  						try:
+  							#print rhashlist[i].IPAddress2
+	  						#print rhashlist[i].port2
+	  						transport = TSocket.TSocket(rhashlist[i].IPAddress2 + ".ucsd.edu", rhashlist[i].port2)
+	  						#transport = TSocket.TSocket("seed-g60-109.ucsd.edu", 9880)
+	  						transport = TTransport.TBufferedTransport(transport)
+	  						protocol = TBinaryProtocol.TBinaryProtocol(transport)
+	  						client = TritonTransfer.Client(protocol)
+	  						transport.open()
+	  						client.ping()
+	  						client.uploadBlock(hashlist[j], content[j])
+	  						transport.close()
+	  					except LargeBlockException:
+  							print "ERROR"
+
+  						except InvalidHashException:
+  							print "ERROR"
+
+	  					except Thrift.TException, tx:
+  							return '%s' % (tx.message)
+  						break
+
+	  		fo.close()
+	  		print "OK"
+
+	  	elif(operation == "download"):
+	  		try:
+				transport = TSocket.TSocket(server, port)
+	  			transport = TTransport.TBufferedTransport(transport)
+	  			protocol = TBinaryProtocol.TBinaryProtocol(transport)
+	  			client = TritonTransfer.Client(protocol)
+	  			transport.open()
+				client.ping()
+	  		
+		  		rehashlist = []
+		  		rehashlist = client.downloadFile(filename)
+		  		down_dir_real = os.path.realpath(down_dir)
+		  		fullpath = os.path.join(down_dir_real, filename)
+
+		  		pre_content = []
+		  		pre_hashlist = []
+		  		filenames = os.listdir(down_dir_real)
+		  		for k in range(len(filenames)):
+		  			fullname = os.path.join(down_dir_real, filenames[k])
+		  			fotmp = open(fullname, "r+")
+		  			while True:
+		  				data = fotmp.read(16000)
+		  				if not data:
+		  					break
+		  				pre_content.append(data)
+		  				encode = hashlib.sha256(data).hexdigest()
+		  				pre_hashlist.append(encode)
+		  			fotmp.close()
+		  		transport.close()
+		  	except Thrift.TException, tx:
+  				return '%s' % (tx.message)
+
+		  	fw = open(fullpath, "w+")
+		  	flag = 0
+		  	for i in range(len(rehashlist)):
+		  		flag = 0
+		  		#print rehashlist[i].hashValue
+		  		for j in range(len(pre_hashlist)):
+		  			if(pre_hashlist[j] == rehashlist[i].hashValue):
+		  				#print "copy content"
+		  				fw.write(pre_content[j])
+		  				flag = 1
+		  				break
+		  		#print flag
+		  		if(flag == 0):	
+		  			#written = 0				
+		  			try:
+		  				transport = TSocket.TSocket(rehashlist[i].IPAddress1 + ".ucsd.edu", rehashlist[i].port1)
+		  				transport = TTransport.TBufferedTransport(transport)
+		  				protocol = TBinaryProtocol.TBinaryProtocol(transport)
+		  				client = TritonTransfer.Client(protocol)
+		  					#transport.setTimeout(1000)  # set time out
+		  				transport.open()
+		  				client.ping()
+		  				re = client.downloadBlock(rehashlist[i].hashValue)
+		  				if(re.status == "OK"):
+		  					fw.write(re.content)
+		  					#written = 1
+		  					pre_hashlist.append(rehashlist[i].hashValue)
+		  					pre_content.append(re.content)
+		  				transport.close()
+		  			except NoSuchBlockException:
+	  					print "ERROR"
+		  			except Thrift.TException, tx:
+	  					print '%s' % (tx.message)
+	  				#if(written == 0):
+		  				try:
+			  				transport = TSocket.TSocket(rehashlist[i].IPAddress2 + ".ucsd.edu", rehashlist[i].port2)
+			  				transport = TTransport.TBufferedTransport(transport)
+			  				protocol = TBinaryProtocol.TBinaryProtocol(transport)
+			  				client = TritonTransfer.Client(protocol)
+			  				#transport.setTimeout(1000)  # set time out
+			  				transport.open()
+			  				client.ping()
+			  				re = client.downloadBlock(rehashlist[i].hashValue)
+			  				if(re.status == "OK"):
+			  					fw.write(re.content)
+			  					pre_hashlist.append(rehashlist[i].hashValue)
+			  					pre_content.append(re.content)
+			  				transport.close()
+			  			except NoSuchBlockException:
+		  					print "ERROR"
+			  			except Thrift.TException, tx:
+		  					return '%s' % (tx.message)
+
+	  		fw.close()
+	  		print "OK"
+
+if __name__ == "__main__":
+	server = sys.argv[1]
+	port = sys.argv[2]
+	operation = sys.argv[3]
+	filename = sys.argv[4]
+	if(operation == "download"):
+		down_dir = sys.argv[5]
+	begin()
